@@ -3,6 +3,12 @@ module RansackMemory
     extend ActiveSupport::Concern
 
     def save_and_load_filters
+      if ::RansackMemory::Core.config[:storage_klass]
+        session_storage = ::RansackMemory::Core.config[:storage_klass].constantize.new(self)
+      else
+        session_storage = session
+      end
+
       user_set_key_identifier = respond_to?(:set_session_key_identifier) ? send(:set_session_key_identifier) : nil
 
       session_key_identifier = ::RansackMemory::Core.config[:session_key_format]
@@ -18,44 +24,45 @@ module RansackMemory
 
       # cancel filter if button pressed
       if params[:cancel_filter] == "true"
-        session["#{session_key_base}"] = nil
-        session["#{session_key_base}_page"] = nil
-        session["#{session_key_base}_per_page"] = nil
+        session_storage["#{session_key_base}"] = nil
+        session_storage["#{session_key_base}_page"] = nil
+        session_storage["#{session_key_base}_per_page"] = nil
       end
 
       # search term saving
-      session["#{session_key_base}"] = params[::RansackMemory::Core.config[:param]].to_h if params[::RansackMemory::Core.config[:param]].present?
+      session_storage["#{session_key_base}"] = params[::RansackMemory::Core.config[:param]].to_h if params[::RansackMemory::Core.config[:param]].present?
 
       # page number saving
-      session["#{session_key_base}_page"] = params[:page] if params[:page].present?
+      target_page = params[:page].presence || 1
+      session_storage["#{session_key_base}_page"] = target_page
 
       # per page saving
-      session["#{session_key_base}_per_page"] = params[:per_page] if params[:per_page].present?
+      session_storage["#{session_key_base}_per_page"] = params[:per_page] if params[:per_page].present?
 
       # search term load
-      params[::RansackMemory::Core.config[:param]] = session["#{session_key_base}"] if session["#{session_key_base}"].present?
+      params[::RansackMemory::Core.config[:param]] = session_storage["#{session_key_base}"] if session_storage["#{session_key_base}"].present?
 
       # page number load
-      params[:page] = session["#{session_key_base}_page"].presence
+      params[:page] = session_storage["#{session_key_base}_page"].presence
 
       # per page load
-      params[:per_page] = session["#{session_key_base}_per_page"].presence
+      params[:per_page] = session_storage["#{session_key_base}_per_page"].presence
 
       # set page number to 1 if filter has changed
-      if (params[::RansackMemory::Core.config[:param]].present? && session[:last_q_params] != params[::RansackMemory::Core.config[:param]].permit!.to_h) || (params[:cancel_filter].present? && session["#{session_key_base}_page"] != params[:page])
+      if (params[::RansackMemory::Core.config[:param]].present? && session_storage[:last_q_params] != params[::RansackMemory::Core.config[:param]].permit!.to_h) || (params[:cancel_filter].present? && session_storage["#{session_key_base}_page"] != params[:page])
         params[:page] = nil
-        session["#{session_key_base}_page"] = nil
+        session_storage["#{session_key_base}_page"] = nil
       end
 
-      session[:last_q_params] = params[::RansackMemory::Core.config[:param]]&.to_unsafe_h
+      session_storage[:last_q_params] = params[::RansackMemory::Core.config[:param]]&.to_unsafe_h
 
       # session[:last_page] = params[:page]
     end
 
     # controller method, useful when you want to clear sessions when sign into another user
     def clear_sessions
-      session.keys.each do |key|
-        session.delete(key) if key =~ /ranmemory_/
+      session_storage.keys.each do |key|
+        session_storage.delete(key) if key =~ /ranmemory_/
       end
     end
   end
