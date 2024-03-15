@@ -3,6 +3,8 @@ module RansackMemory
     extend ActiveSupport::Concern
 
     def save_and_load_filters
+      return if params[::RansackMemory::Core.config[:param]].is_a? String
+
       if ::RansackMemory::Core.config[:storage_klass]
         session_storage = ::RansackMemory::Core.config[:storage_klass].constantize.new(self)
       else
